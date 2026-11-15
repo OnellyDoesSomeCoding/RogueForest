@@ -1,0 +1,12 @@
+{
+  "biomes": [
+    { "id": "meadow", "name": "Sunlit Meadow", "types": ["Flora", "Zephyr"], "pool": ["gustling", "pollenbee", "sproutle", "lumoth", "pebbun"], "acts": [1] },
+    { "id": "marsh", "name": "Mistwater Marsh", "types": ["Dew", "Gloom"], "pool": ["dewdle", "murkling", "shadewick", "claypaw", "sporeling"], "acts": [2, 3, 4] },
+    { "id": "scorched", "name": "Scorched Grove", "types": ["Ember", "Flora"], "pool": ["emberkit", "ashmole", "cinderbat", "sproutle", "wisplet"], "acts": [2, 3, 4] },
+    { "id": "canyon", "name": "Clay Canyon", "types": ["Clay", "Zephyr"], "pool": ["pebbun", "ashmole", "shellcrag", "gustling", "claypaw", "cinderbat"], "acts": [2, 3, 4] },
+    { "id": "rustwood", "name": "Rustwood Ruins", "types": ["Iron", "Gloom"], "pool": ["rivetle", "rustrat", "shadewick", "shellcrag"], "acts": [2, 3, 4] },
+    { "id": "glowcap", "name": "Glowcap Caverns", "types": ["Lume", "Gloom", "Flora"], "pool": ["glimmet", "sunpetal", "sporeling", "wisplet", "lumoth"], "acts": [2, 3, 4] },
+    { "id": "frostpine", "name": "Frostbitten Pines", "types": ["Dew", "Iron"], "pool": ["frostfawn", "rivetle", "dewdle", "murkling"], "acts": [2, 3, 4] },
+    { "id": "heartwood", "name": "Withered Heartwood", "types": ["Ember", "Dew", "Clay", "Zephyr", "Gloom", "Lume", "Iron", "Flora"], "pool": ["emberkit", "dewdle", "sproutle", "pebbun", "gustling", "lumoth", "shadewick", "glimmet", "rivetle", "claypaw", "sporeling", "ashmole", "pollenbee", "frostfawn", "rustrat", "wisplet", "cinderbat", "shellcrag", "sunpetal", "murkling"], "acts": [5] }
+  ]
+}

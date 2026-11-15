@@ -39,6 +39,48 @@ export interface CritterLine {
   statsOverride?: Partial<Stats>;
 }
 
+export type MoveShape = "single" | "line" | "plus" | "square3" | "around" | "row" | "self";
+export type MoveTarget = "enemy" | "ally" | "tile" | "self";
+
+export type Effect =
+  | { type: "status"; status: string }
+  | { type: "push"; distance: number }
+  | { type: "pull"; distance: number }
+  | { type: "pullToCenter"; distance: number }
+  | { type: "heal"; percent: number }
+  | { type: "lifesteal"; percent: number }
+  | { type: "obstacle"; rounds: number }
+  | { type: "pierce" }
+  | { type: "ignoreGuard" }
+  | { type: "cleanse" }
+  | { type: "includeSelf" };
+
+export interface Move {
+  id: string;
+  name: string;
+  type: TypeId | "Neutral";
+  /** 0–3 */
+  mana: number;
+  /** Own turns before reuse. 0 = every turn. */
+  cooldown: number;
+  /** 0 for non-damage moves. */
+  power: number;
+  /** Manhattan distance from the user to the target tile: [min, max]. */
+  range: [number, number];
+  shape: MoveShape;
+  target: MoveTarget;
+  effects: Effect[];
+}
+
+export interface BiomeDef {
+  id: string;
+  name: string;
+  types: TypeId[];
+  /** Critter line IDs that appear as enemies and shop stock. */
+  pool: string[];
+  acts: number[];
+}
+
 export interface BadgeDef {
   id: string;
   name: string;

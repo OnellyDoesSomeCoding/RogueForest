@@ -1,8 +1,8 @@
-# Rogue Forest: Technical Design (v0.5)
+# Rogue Forest: Technical Design (v0.6)
 
 > **For Claude Code:** This is the source of truth for building Rogue Forest. Read it fully before writing code. Build milestone by milestone (see "Milestones"). Every number marked *tunable* lives in `shared/data/config.json`, not in code. If a rule here is unclear or seems wrong, ask instead of guessing. **Do not run `git commit` unless the user asks.**
 >
-> Art specs live in `ART_SPRITES.md`. Critter IDs match across both docs.
+> Art specs live in `ART_SPRITES.md`. Critter IDs match across both docs. The art bundle is in `docs/rogue-forest-art/` and its `assets/` folder is copied into `client/public/assets/`.
 
 ---
 
@@ -374,6 +374,7 @@ Visuals for every ID are in `ART_SPRITES.md`. Moves reference §8.3.
 | 41–50 | 8×6 | 9×7 | 9×7 |
 
 - One unit per tile. Obstacles (rocks) block movement and line attacks.
+- Normal fights have a 50% chance of one rock in the middle column (*placeholder*).
 - Distance = Manhattan. Movement is 4-directional, can't pass through units or obstacles.
 
 ### 7.2 Placement (pre-fight)
@@ -384,6 +385,7 @@ Visuals for every ID are in `ART_SPRITES.md`. Moves reference §8.3.
   - Front: the 2 columns of a side's half nearest the grid center.
   - Back: the 2 columns of a side's half at the far edge.
   - On small grids Front and Back can overlap. Each critter only checks its own optimal tile type.
+  - Zones are the same for both sides. A player critter standing in the enemy's Front columns also gets the bonus.
   - Flank: top or bottom row.
   - Bonus: +10% damage dealt (*tunable*).
 - Show the bonus zone as a soft tile tint while placing.
@@ -397,6 +399,8 @@ Visuals for every ID are in `ART_SPRITES.md`. Moves reference §8.3.
 4. **Each unit's turn:**
    - Start: apply status ticks (Burn, Regen), check Stun.
    - Player critter: **move up to MOV tiles, then use one move** (or skip either). Moving after attacking is not allowed.
+     - One move action per turn (a single path of up to MOV tiles).
+     - Using a move ends the turn automatically. **End Turn** skips the rest of the turn.
    - Enemy: moves to its ghost tile (nearest free tile if blocked), then attacks its declared tiles.
 5. **Round end:** remove expired statuses.
 
@@ -457,7 +461,7 @@ interface Move {
   name: string;
   type: TypeId | "Neutral";
   mana: number;          // 0–3
-  cooldown: number;      // own turns before reuse; 0 = every turn
+  cooldown: number;      // own turns before reuse; 0 = every turn, 1 = skip one own turn
   power: number;         // 0 for non-damage moves
   range: [min: number, max: number]; // Manhattan distance from user to target tile
   shape: "single" | "line" | "plus" | "square3" | "around" | "row" | "self";
@@ -467,12 +471,15 @@ interface Move {
 ```
 - Shapes:
   - `single`: one tile.
-  - `line`: straight line from the user, length = range max, in one of 4 directions. Stops at obstacles.
+  - `line`: straight line from the user, length = range max, in one of 4 directions. Stops at obstacles. Also stops at the first unit it meets (ally or enemy), unless the move pierces.
   - `plus`: target tile + 4 neighbors.
   - `square3`: 3×3 around the target tile.
   - `around`: the 8 tiles around the user.
-  - `row`: every tile in a row or column from the user, until an obstacle.
+  - `row`: every tile in a row or column from the user, until an obstacle. Passes through units.
   - `self`: the user.
+- No friendly fire: `enemy` moves only affect the other side, `ally` moves only affect the user's side (including the user).
+- A player can only aim a move where it would affect at least one unit, so mana is never wasted on empty tiles.
+- Effects in `moves.json`: `status`, `push`, `pull`, `pullToCenter`, `heal`, `lifesteal`, `obstacle`, `pierce`, `ignoreGuard`, `cleanse`, `includeSelf`.
 - Push/pull: move the target N tiles away from/toward the user. Blocked by units, obstacles, and grid edge → stops, takes 5% max HP collision damage.
 
 ### 8.2 Design rule
@@ -697,7 +704,13 @@ interface OwnedCritter {
 
 ## 14. Rendering and UI notes
 - Base resolution 480×270, integer-scaled to fit the window. `pixelArt: true` in Phaser (nearest-neighbor).
+  - The zoom is worked out in device pixels, so screens with 125% or 150% scaling are not stretched by the browser. The canvas has 480×270 × zoom device pixels, and each scene's camera zooms by the same factor.
+  - When the window crosses a zoom step, or the screen scaling changes, the Phaser game is rebuilt at the new size and continues from the stored combat state.
+- UI text is HTML drawn on top of the canvas (`client/src/game/domText.ts`), so the browser renders it at full screen resolution.
+  - HTML text is always above the canvas. When a canvas backdrop must cover text (like a popup's dark background), the scene hides the text below it.
+  - Text that must move with a sprite inside a Phaser container stays as canvas text (`canvasLabel`).
 - Tile = 32×32. Critter sprites = 48×48, anchored bottom-center on the tile (they overlap upward).
+- Critter sheets are 288×48: 6 frames of 48×48 in this order: idle A, idle B, windup, strike, hurt, faint.
 - Player critters face right. Enemy critters use the same sprite, flipped.
 - Highlights drawn in code: move range (blue), attack range (yellow), enemy intents (red), optimal zone (soft green).
 - Timeline bar: small portraits in turn order at the top.
@@ -711,7 +724,7 @@ interface OwnedCritter {
 |---|---|---|
 | M0 | Monorepo setup | `npm run dev` starts client + server; Vitest runs |
 | M1 | Pages + auth | Home, Login, Starter Select work; signup/login/logout; 3 starters unlocked |
-| M2 | Combat sandbox | One 5×3 fight: placement, move-then-act, mana, cooldowns, timeline, type chart |
+| M2 | Combat sandbox | One 5×3 fight: placement, move-then-act, mana, cooldowns, timeline, type chart. Damage, heals, lifesteal and pierce work. Enemies use a simple "best damage" turn. Moves that only apply a status, push/pull or a rock are disabled until M3 |
 | M3 | Intents + AI | Enemy intents, dodging, push/pull, statuses |
 | M4 | Map + rooms | Act 1 map, room flow, rewards, faint +1 HP rule, game over |
 | M5 | Economy | Shop, packs, potions, relics, Captive offers, unlocks API |
@@ -724,6 +737,8 @@ interface OwnedCritter {
 ---
 
 ## 16. Open questions
+- Screen layout for big grids: a 9×7 grid is 288×224 px, which does not fit the 480×270 screen next to the side panels. Needs smaller tiles, a scrolling board, or collapsible panels (before M7).
+- The art bundle's icon names do not match this doc yet: statuses (it has poison, sleep, shield; this doc has Burn, Root, Slow, Stun, Weak, Guard, Regen, Evade, Empower, Haste), potions and relics.
 - Boss signature moves and the Hollow Druid's phases.
 - Biome-specific tile rules (later?).
 - Move learning on level up / evolution.

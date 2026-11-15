@@ -1,0 +1,45 @@
+{
+  "moves": [
+    { "id": "N2", "name": "Guard Up", "type": "Neutral", "mana": 1, "cooldown": 2, "power": 0, "range": [0, 0], "shape": "self", "target": "self", "effects": [{ "type": "status", "status": "Guard" }] },
+
+    { "id": "E1", "name": "Spark", "type": "Ember", "mana": 1, "cooldown": 0, "power": 45, "range": [1, 3], "shape": "single", "target": "enemy", "effects": [] },
+    { "id": "E2", "name": "Flame Line", "type": "Ember", "mana": 2, "cooldown": 1, "power": 50, "range": [1, 3], "shape": "line", "target": "enemy", "effects": [{ "type": "status", "status": "Burn" }] },
+    { "id": "E3", "name": "Fireburst", "type": "Ember", "mana": 3, "cooldown": 3, "power": 70, "range": [2, 4], "shape": "square3", "target": "enemy", "effects": [] },
+    { "id": "E4", "name": "Kindle", "type": "Ember", "mana": 1, "cooldown": 2, "power": 0, "range": [0, 0], "shape": "self", "target": "self", "effects": [{ "type": "status", "status": "Empower" }] },
+
+    { "id": "D1", "name": "Splash", "type": "Dew", "mana": 1, "cooldown": 0, "power": 40, "range": [1, 3], "shape": "single", "target": "enemy", "effects": [{ "type": "status", "status": "Slow" }] },
+    { "id": "D2", "name": "Tidal Push", "type": "Dew", "mana": 2, "cooldown": 1, "power": 40, "range": [1, 3], "shape": "line", "target": "enemy", "effects": [{ "type": "push", "distance": 2 }] },
+    { "id": "D3", "name": "Mending Rain", "type": "Dew", "mana": 2, "cooldown": 3, "power": 0, "range": [0, 3], "shape": "plus", "target": "ally", "effects": [{ "type": "heal", "percent": 30 }] },
+    { "id": "D4", "name": "Bubble Shield", "type": "Dew", "mana": 1, "cooldown": 2, "power": 0, "range": [0, 2], "shape": "single", "target": "ally", "effects": [{ "type": "status", "status": "Guard" }] },
+
+    { "id": "C1", "name": "Pebble Toss", "type": "Clay", "mana": 1, "cooldown": 0, "power": 40, "range": [2, 4], "shape": "single", "target": "enemy", "effects": [] },
+    { "id": "C2", "name": "Quake Stomp", "type": "Clay", "mana": 2, "cooldown": 2, "power": 50, "range": [0, 0], "shape": "around", "target": "enemy", "effects": [] },
+    { "id": "C3", "name": "Earth Wall", "type": "Clay", "mana": 1, "cooldown": 3, "power": 0, "range": [1, 3], "shape": "single", "target": "tile", "effects": [{ "type": "obstacle", "rounds": 2 }] },
+    { "id": "C4", "name": "Landslide", "type": "Clay", "mana": 3, "cooldown": 3, "power": 60, "range": [1, 9], "shape": "row", "target": "enemy", "effects": [] },
+
+    { "id": "Z1", "name": "Gust", "type": "Zephyr", "mana": 1, "cooldown": 0, "power": 35, "range": [1, 3], "shape": "single", "target": "enemy", "effects": [{ "type": "push", "distance": 1 }] },
+    { "id": "Z2", "name": "Tailwind", "type": "Zephyr", "mana": 2, "cooldown": 3, "power": 0, "range": [0, 0], "shape": "around", "target": "ally", "effects": [{ "type": "status", "status": "Haste" }] },
+    { "id": "Z3", "name": "Cyclone", "type": "Zephyr", "mana": 2, "cooldown": 2, "power": 40, "range": [2, 3], "shape": "square3", "target": "enemy", "effects": [{ "type": "pullToCenter", "distance": 1 }] },
+    { "id": "Z4", "name": "Razor Wind", "type": "Zephyr", "mana": 2, "cooldown": 1, "power": 55, "range": [1, 4], "shape": "line", "target": "enemy", "effects": [{ "type": "pierce" }] },
+
+    { "id": "F1", "name": "Vine Lash", "type": "Flora", "mana": 1, "cooldown": 0, "power": 40, "range": [1, 2], "shape": "single", "target": "enemy", "effects": [{ "type": "pull", "distance": 1 }] },
+    { "id": "F2", "name": "Entangle", "type": "Flora", "mana": 2, "cooldown": 2, "power": 25, "range": [1, 3], "shape": "single", "target": "enemy", "effects": [{ "type": "status", "status": "Root" }] },
+    { "id": "F3", "name": "Sap Drain", "type": "Flora", "mana": 2, "cooldown": 1, "power": 45, "range": [1, 2], "shape": "single", "target": "enemy", "effects": [{ "type": "lifesteal", "percent": 50 }] },
+    { "id": "F4", "name": "Bloom", "type": "Flora", "mana": 2, "cooldown": 3, "power": 0, "range": [0, 2], "shape": "plus", "target": "ally", "effects": [{ "type": "heal", "percent": 25 }, { "type": "status", "status": "Regen" }] },
+
+    { "id": "I1", "name": "Iron Claw", "type": "Iron", "mana": 1, "cooldown": 0, "power": 50, "range": [1, 1], "shape": "single", "target": "enemy", "effects": [] },
+    { "id": "I2", "name": "Bulwark", "type": "Iron", "mana": 1, "cooldown": 2, "power": 0, "range": [0, 0], "shape": "around", "target": "ally", "effects": [{ "type": "status", "status": "Guard" }, { "type": "includeSelf" }] },
+    { "id": "I3", "name": "Spike Shot", "type": "Iron", "mana": 2, "cooldown": 1, "power": 45, "range": [2, 4], "shape": "single", "target": "enemy", "effects": [{ "type": "ignoreGuard" }] },
+    { "id": "I4", "name": "Anvil Drop", "type": "Iron", "mana": 3, "cooldown": 3, "power": 80, "range": [1, 3], "shape": "single", "target": "enemy", "effects": [{ "type": "status", "status": "Stun" }] },
+
+    { "id": "G1", "name": "Shadow Bite", "type": "Gloom", "mana": 1, "cooldown": 0, "power": 45, "range": [1, 1], "shape": "single", "target": "enemy", "effects": [] },
+    { "id": "G2", "name": "Dread Gaze", "type": "Gloom", "mana": 1, "cooldown": 2, "power": 0, "range": [1, 3], "shape": "single", "target": "enemy", "effects": [{ "type": "status", "status": "Weak" }] },
+    { "id": "G3", "name": "Night Veil", "type": "Gloom", "mana": 2, "cooldown": 3, "power": 0, "range": [0, 2], "shape": "single", "target": "ally", "effects": [{ "type": "status", "status": "Evade" }] },
+    { "id": "G4", "name": "Soul Drain", "type": "Gloom", "mana": 2, "cooldown": 1, "power": 50, "range": [1, 3], "shape": "single", "target": "enemy", "effects": [{ "type": "lifesteal", "percent": 50 }] },
+
+    { "id": "L1", "name": "Glint", "type": "Lume", "mana": 1, "cooldown": 0, "power": 35, "range": [1, 4], "shape": "single", "target": "enemy", "effects": [] },
+    { "id": "L2", "name": "Flash", "type": "Lume", "mana": 2, "cooldown": 2, "power": 20, "range": [1, 3], "shape": "plus", "target": "enemy", "effects": [{ "type": "status", "status": "Weak" }] },
+    { "id": "L3", "name": "Radiance", "type": "Lume", "mana": 2, "cooldown": 2, "power": 0, "range": [0, 4], "shape": "single", "target": "ally", "effects": [{ "type": "heal", "percent": 35 }, { "type": "cleanse" }] },
+    { "id": "L4", "name": "Sunbeam", "type": "Lume", "mana": 3, "cooldown": 3, "power": 65, "range": [1, 9], "shape": "row", "target": "enemy", "effects": [] }
+  ]
+}

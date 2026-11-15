@@ -238,6 +238,7 @@ button {
   width: var(--size);
   height: var(--size);
   flex: none;
+  overflow: hidden;
 }
 
 .critter-icon__placeholder {
@@ -258,10 +259,18 @@ button {
     -1px -1px 0 var(--black);
 }
 
+/* Sprite sheets hold 6 frames of 48×48 side by side. Show only the first one (idle).
+   Stage-1 critters fill just the bottom-center of their frame, so the frame is drawn at
+   150% and cropped to that part. */
 .critter-icon__sprite {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  position: absolute;
+  left: -25%;
+  top: -50%;
+  width: 150%;
+  height: 150%;
+  max-width: none;
+  object-fit: cover;
+  object-position: left bottom;
   image-rendering: pixelated;
 }
 
@@ -367,6 +376,47 @@ button {
   justify-content: flex-end;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* ---- game page: the Phaser canvas, centered ---- */
+.game-stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--black);
+  overflow: hidden;
+}
+
+.game-stage {
+  display: block;
+}
+
+/* The canvas and the HTML text layer, stacked at the same size. JS sets its size and position. */
+.game-frame {
+  position: absolute;
+}
+
+.game-frame canvas {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.game-text-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+
+.game-text {
+  position: absolute;
+  margin: 0;
+  white-space: pre;
+  font-family: var(--font-pixel);
+  color: var(--text);
 }
 
 @media (prefers-reduced-motion: reduce) {

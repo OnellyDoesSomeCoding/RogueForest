@@ -2,7 +2,7 @@
 
 A browser-based, turn-based, grid-combat roguelike. The full design is in [docs/TECH_DESIGN.md](docs/TECH_DESIGN.md).
 
-**Status:** milestones M0 (monorepo) and M1 (pages + accounts) are done. The game itself starts with M2.
+**Status:** milestones M0 (monorepo), M1 (pages + accounts) and M2 (combat sandbox) are done. Starting a run opens one practice fight. Enemy intents, statuses and push/pull come with M3.
 
 ## Run it locally
 
@@ -33,7 +33,7 @@ Add `?dev=1` to the Starter Select URL (`#/starter?dev=1`) to get a seed input.
 | Folder | Contents |
 |---|---|
 | `shared/` | Game data (JSON), the pure game engine, shared types and zod schemas |
-| `client/` | Vite app: Home, Login and Starter Select pages (Phaser game screens come later) |
+| `client/` | Vite app: Home, Login and Starter Select pages, plus the Phaser game in `client/src/game/` |
 | `server/` | Express API: accounts, sessions, saves, unlocks, badges |
 | `api/` | Vercel function entry that re-exports the Express app |
 

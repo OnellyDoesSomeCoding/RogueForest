@@ -15,5 +15,6 @@ export default defineConfig({
     // Same origin as the API in dev, like on Vercel.
     proxy: { "/api": { target: "http://localhost:3001", xfwd: true } },
   },
-  build: { outDir: "dist", emptyOutDir: true },
+  // Phaser is about 1.4 MB. It sits in its own chunk that only loads on the game page.
+  build: { outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 1600 },
 });

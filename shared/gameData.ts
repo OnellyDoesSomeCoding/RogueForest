@@ -3,17 +3,35 @@ import configJson from "./data/config.json";
 import crittersJson from "./data/critters.json";
 import typesJson from "./data/types.json";
 import badgesJson from "./data/badges.json";
-import type { BadgeDef, CritterLine, CritterStage, TypeDef, TypeId } from "./types";
+import biomesJson from "./data/biomes.json";
+import movesJson from "./data/moves.json";
+import type { BadgeDef, BiomeDef, CritterLine, CritterStage, Move, TypeDef, TypeId } from "./types";
 
 export const config = configJson;
 
 export const critters = crittersJson.critters as CritterLine[];
 export const typeDefs = typesJson.types as TypeDef[];
 export const badges = badgesJson.badges as BadgeDef[];
+export const moves = movesJson.moves as Move[];
+export const biomes = biomesJson.biomes as BiomeDef[];
 
 const critterByLine = new Map(critters.map((c) => [c.line, c]));
 const typeById = new Map(typeDefs.map((t) => [t.id, t]));
 const badgeById = new Map(badges.map((b) => [b.id, b]));
+const moveById = new Map(moves.map((m) => [m.id, m]));
+const biomeById = new Map(biomes.map((b) => [b.id, b]));
+
+export function getMove(id: string): Move {
+  const move = moveById.get(id);
+  if (!move) throw new Error(`Unknown move: ${id}`);
+  return move;
+}
+
+export function getBiome(id: string): BiomeDef {
+  const biome = biomeById.get(id);
+  if (!biome) throw new Error(`Unknown biome: ${id}`);
+  return biome;
+}
 
 export function getCritterLine(line: string): CritterLine | undefined {
   return critterByLine.get(line);

@@ -1,4 +1,4 @@
-/* Login page (#/login) and the temporary run summary on #/game. */
+/* Login page (#/login). */
 .auth {
   min-height: 100vh;
   display: grid;
@@ -64,66 +64,4 @@
 .auth__panel .link {
   justify-self: center;
   font-size: 14px;
-}
-
-/* ---- run summary (placeholder game page) ---- */
-.run-summary {
-  width: min(520px, 100%);
-  display: grid;
-  gap: 14px;
-}
-
-.run-summary h1 {
-  color: var(--gold);
-  font-size: 32px;
-}
-
-.run-summary h3 {
-  color: var(--gold-hi);
-  font-size: 18px;
-}
-
-.run-critters {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-
-.run-critter {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 12px 6px 6px;
-  background: var(--black);
-  border: var(--px) solid var(--line);
-}
-
-.run-critter .critter-icon {
-  --size: 48px;
-}
-
-.run-critter .type-chips {
-  display: flex;
-  justify-content: flex-start;
-  margin-top: 2px;
-}
-
-.run-critter__level {
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.run-critter__hp {
-  margin-left: auto;
-  font-family: var(--font-pixel);
-  color: var(--moss);
-  white-space: nowrap;
-}
-
-.run-summary__seed {
-  font-size: 13px;
-  color: var(--muted);
-  overflow-wrap: anywhere;
 }
