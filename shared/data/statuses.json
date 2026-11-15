@@ -1,0 +1,14 @@
+{
+  "statuses": [
+    { "id": "Burn", "kind": "bad", "turns": 2, "icon": "burn", "percent": 8, "text": "Loses 8% max HP at the start of each turn." },
+    { "id": "Root", "kind": "bad", "turns": 2, "icon": "root", "text": "Can't move." },
+    { "id": "Slow", "kind": "bad", "turns": 2, "icon": "slow", "mov": -1, "spd": -2, "text": "MOV −1, SPD −2. SPD changes turn order from the next round." },
+    { "id": "Stun", "kind": "bad", "turns": 1, "icon": "stun", "text": "Skips its next turn." },
+    { "id": "Weak", "kind": "bad", "turns": 2, "icon": "weak", "damageDealt": 0.75, "text": "Deals 25% less damage." },
+    { "id": "Guard", "kind": "good", "turns": 1, "icon": "shield", "damageTaken": 0.6, "text": "Takes 40% less damage." },
+    { "id": "Regen", "kind": "good", "turns": 3, "icon": "regen", "percent": 8, "text": "Heals 8% max HP at the start of each turn." },
+    { "id": "Evade", "kind": "good", "turns": 2, "icon": "evade", "text": "The next hostile move that hits it does nothing." },
+    { "id": "Empower", "kind": "good", "turns": 2, "icon": "empower", "damageDealt": 1.25, "text": "Deals 25% more damage." },
+    { "id": "Haste", "kind": "good", "turns": 2, "icon": "haste", "mov": 1, "spd": 2, "text": "MOV +1, SPD +2. SPD changes turn order from the next round." }
+  ]
+}

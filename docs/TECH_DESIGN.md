@@ -1,4 +1,4 @@
-# Rogue Forest: Technical Design (v0.6)
+# Rogue Forest: Technical Design (v0.7)
 
 > **For Claude Code:** This is the source of truth for building Rogue Forest. Read it fully before writing code. Build milestone by milestone (see "Milestones"). Every number marked *tunable* lives in `shared/data/config.json`, not in code. If a rule here is unclear or seems wrong, ask instead of guessing. **Do not run `git commit` unless the user asks.**
 >
@@ -407,7 +407,13 @@ Visuals for every ID are in `ART_SPRITES.md`. Moves reference §8.3.
 ### 7.4 Enemy intents rules
 - Intents target **tiles**, not units. Step out of the red tiles to dodge.
 - If an enemy is pushed, pulled, or rooted before its turn, it still attacks the declared tiles **only if** they're in range of its new position. Otherwise the attack fizzles.
-- Stunned enemies lose their turn (intent cancelled).
+- Stunned enemies lose their turn (intent cancelled). A Stun applied before the enemy acts cancels its intent right away. An enemy that is stunned when the round starts declares no intent.
+- Enemies plan at round start, against where your critters stand then. Two enemies never plan to walk to the same tile.
+- On its turn an enemy walks to its ghost tile. If that tile is blocked, it walks to the reachable tile nearest to it (or stays, if staying is as close). Rooted enemies stay put.
+- **Attacks only ever hit tiles that were shown red.** After walking, the attack is re-aimed from where the enemy stands and keeps only the declared tiles it can still reach. None left = it fizzles ("out of range").
+- Heals and buffs (green badge, no red tiles) re-aim the same way, but they are not limited to declared tiles. Self-centered ones follow the enemy.
+- Enemies do not hurt each other (no friendly fire), and do not place rocks yet.
+- UI: red tiles for attacks, a faded ghost of the enemy on its destination tile, a badge with the move's type icon in the corner of the enemy's tile, and the expected damage in the corner of each of your critters standing on red tiles.
 
 ### 7.5 Mana (StS style)
 - Shared team pool. Max 3 per round (*tunable*), refilled each round. Unused mana is lost.
@@ -433,13 +439,18 @@ variance = seeded random 0.9–1.1
 | Weak | Deal −25% damage | 2 turns |
 | Guard | Take −40% damage | 1 turn |
 | Regen | Heal 8% max HP at turn start | 3 turns |
-| Evade | Next hit taken deals 0 | Until hit or 2 turns |
+| Evade | Next hostile move that hits it does nothing to it (no damage, no status, no push) | Until hit or 2 turns |
 | Empower | Deal +25% damage | 2 turns |
 | Haste | MOV +1, SPD +2 | 2 turns |
 
 - Durations count the holder's own turns and tick down at the end of each of its turns. Guard for 1 turn therefore protects until the end of the holder's next turn.
 - Round-based things stay in rounds: mana refill, cooldown ticks, intents, and placed obstacles (Earth Wall).
 - Same status reapplied refreshes duration (doesn't stack).
+- Status data (durations, numbers, icons) lives in `statuses.json`.
+- Burn and Regen happen at the start of the holder's turn, before Stun is checked. Burn can make a critter faint.
+- Weak, Empower and Guard multiply the final damage (×0.75, ×1.25, ×0.6). Spike Shot ignores Guard. Damage is still at least 1.
+- Slow and Haste change MOV right away, and SPD (turn order) from the next round.
+- Icons: the art bundle's burn, stun, weak, regen, haste and shield (used for Guard). Root, Slow, Evade and Empower are drawn in code until real files are added at `assets/icons/status_<name>.png` (names in `statuses.json`).
 
 ### 7.8 Fainting
 - HP 0 → removed from the grid for the rest of the fight.
@@ -449,6 +460,7 @@ variance = seeded random 0.9–1.1
 - For each usable move, for each reachable tile: score = expected damage on player critters in the target tiles (+ bonus for likely faints, + small bonus for staying on its optimal tile).
 - Pick highest score, with small seeded randomness so it isn't perfectly predictable.
 - Support enemies prefer heals/guards when an ally is below 50% HP.
+- Scoring (placeholder): expected damage (+15 if it would faint the target), plus values for bad statuses on you (Stun 18, Weak 8, Burn 8, Root 6, Slow 5), push/pull 2, and heals or good statuses on allies (worth more below 50% HP, ×1.5 for support critters). +1 for its optimal tile, +0.3 per tile closer to your nearest critter, and up to 10% seeded noise.
 
 ---
 
@@ -481,6 +493,11 @@ interface Move {
 - A player can only aim a move where it would affect at least one unit, so mana is never wasted on empty tiles.
 - Effects in `moves.json`: `status`, `push`, `pull`, `pullToCenter`, `heal`, `lifesteal`, `obstacle`, `pierce`, `ignoreGuard`, `cleanse`, `includeSelf`.
 - Push/pull: move the target N tiles away from/toward the user. Blocked by units, obstacles, and grid edge → stops, takes 5% max HP collision damage.
+  - The direction is along the longer axis between the user and the target. Ties go horizontal.
+  - A pull that ends against the user itself is not a collision.
+  - Several targets: the farthest is pushed first (the nearest is pulled first), so a line of units does not block itself.
+  - `pullToCenter` (Cyclone) moves each target 1 tile toward the aimed tile, nearest first. A target on the center does not move.
+- Earth Wall (`obstacle`) needs an empty tile. The rock lasts the rest of this round and the next one, and crumbles at the start of the round after.
 
 ### 8.2 Design rule
 - Every critter needs at least one move that costs ≤ 1 mana with cooldown 0.
@@ -725,7 +742,7 @@ interface OwnedCritter {
 | M0 | Monorepo setup | `npm run dev` starts client + server; Vitest runs |
 | M1 | Pages + auth | Home, Login, Starter Select work; signup/login/logout; 3 starters unlocked |
 | M2 | Combat sandbox | One 5×3 fight: placement, move-then-act, mana, cooldowns, timeline, type chart. Damage, heals, lifesteal and pierce work. Enemies use a simple "best damage" turn. Moves that only apply a status, push/pull or a rock are disabled until M3 |
-| M3 | Intents + AI | Enemy intents, dodging, push/pull, statuses |
+| M3 | Intents + AI | Enemy intents, dodging, push/pull, statuses. All moves usable. Support enemies heal and guard |
 | M4 | Map + rooms | Act 1 map, room flow, rewards, faint +1 HP rule, game over |
 | M5 | Economy | Shop, packs, potions, relics, Captive offers, unlocks API |
 | M6 | Growth | XP, levels, evolution, Rest (Heal/Train), TeamScene |
@@ -738,7 +755,7 @@ interface OwnedCritter {
 
 ## 16. Open questions
 - Screen layout for big grids: a 9×7 grid is 288×224 px, which does not fit the 480×270 screen next to the side panels. Needs smaller tiles, a scrolling board, or collapsible panels (before M7).
-- The art bundle's icon names do not match this doc yet: statuses (it has poison, sleep, shield; this doc has Burn, Root, Slow, Stun, Weak, Guard, Regen, Evade, Empower, Haste), potions and relics.
+- Art still missing: status icons for Root, Slow, Evade and Empower (drawn in code for now). The bundle's potion and relic icon names do not match §9 yet.
 - Boss signature moves and the Hollow Druid's phases.
 - Biome-specific tile rules (later?).
 - Move learning on level up / evolution.

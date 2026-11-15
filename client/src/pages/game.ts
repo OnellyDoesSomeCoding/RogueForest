@@ -17,8 +17,9 @@ export const gamePage: Page = (root, ctx) => {
 
     // Phaser is large, so it loads only when the game page opens. The pixel font must be
     // ready before Phaser draws any text.
-    const [{ startGame }] = await Promise.all([
+    const [{ startGame }, statusIcons] = await Promise.all([
       import("../game/session"),
+      import("../game/assets").then((m) => m.findStatusIcons()),
       document.fonts.load('400 16px "Pixelify Sans"').catch(() => undefined),
       document.fonts.load('700 16px "Pixelify Sans"').catch(() => undefined),
     ]);
@@ -26,7 +27,7 @@ export const gamePage: Page = (root, ctx) => {
 
     const stage = h("main", { class: "game-stage" });
     root.replaceChildren(stage);
-    stopGame = startGame(stage, saved.state, () => navigate("/starter"));
+    stopGame = startGame(stage, saved.state, () => navigate("/starter"), statusIcons);
   })().catch((err) => {
     if (!ctx.isCurrent()) return;
     root.replaceChildren(

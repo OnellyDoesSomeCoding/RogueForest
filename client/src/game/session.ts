@@ -18,6 +18,8 @@ export interface GameSession {
   combat: CombatState | null;
   /** RNG state to build the next fight from. */
   rngState: number;
+  /** Status icon names that have an art file. The rest are drawn in code. */
+  statusIcons: Set<string>;
   leave(): void;
 }
 
@@ -33,7 +35,7 @@ function measure(parent: HTMLElement) {
 }
 
 /** Starts the game inside `parent`. Returns a function that shuts it down. */
-export function startGame(parent: HTMLElement, run: RunSave, leave: () => void): () => void {
+export function startGame(parent: HTMLElement, run: RunSave, leave: () => void, statusIcons: Set<string> = new Set()): () => void {
   // The frame holds the canvas and the HTML text layer on top of it, at the same size.
   const frame = document.createElement("div");
   frame.className = "game-frame";
@@ -48,6 +50,7 @@ export function startGame(parent: HTMLElement, run: RunSave, leave: () => void):
     text: { layer, scale: first.zoom / first.dpr, dpr: first.dpr },
     combat: null,
     rngState: run.rngState,
+    statusIcons,
     leave,
   };
   let game: Phaser.Game | null = null;

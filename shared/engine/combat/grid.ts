@@ -1,5 +1,6 @@
 // Grid helpers: positions, occupancy, movement and optimal tiles (TECH_DESIGN §7.1, §7.2).
 import type { OptimalTile } from "../../types";
+import { effectiveMov } from "./statuses";
 import type { CombatState, CombatUnit, Pos } from "./types";
 
 export const DIRS: readonly Pos[] = [
@@ -41,7 +42,18 @@ export function isAlive(unit: CombatUnit): boolean {
 }
 
 /**
- * Tiles a unit can walk to this turn: up to MOV steps, 4-directional,
+ * One step from `from` in the general direction of `to`, along the longer axis.
+ * Ties go horizontal. Returns null when the two tiles are the same.
+ */
+export function stepToward(from: Pos, to: Pos): Pos | null {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (dx === 0 && dy === 0) return null;
+  return Math.abs(dx) >= Math.abs(dy) ? { x: Math.sign(dx), y: 0 } : { x: 0, y: Math.sign(dy) };
+}
+
+/**
+ * Tiles a unit can walk to this turn: up to its MOV (after statuses), 4-directional,
  * never through units or obstacles. Maps tile key -> path (start tile excluded).
  */
 export function reachableTiles(state: CombatState, unit: CombatUnit): Map<string, Pos[]> {
@@ -49,7 +61,8 @@ export function reachableTiles(state: CombatState, unit: CombatUnit): Map<string
   if (!unit.pos) return out;
   let frontier: { pos: Pos; path: Pos[] }[] = [{ pos: unit.pos, path: [] }];
   const seen = new Set([posKey(unit.pos)]);
-  for (let step = 0; step < unit.stats.mov; step++) {
+  const mov = effectiveMov(unit);
+  for (let step = 0; step < mov; step++) {
     const next: typeof frontier = [];
     for (const node of frontier) {
       for (const d of DIRS) {

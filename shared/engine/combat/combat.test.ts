@@ -6,7 +6,7 @@ import { applyAction, currentUnit, moveBlockedReason, turnOrder } from "./combat
 import { computeDamage, typeMultiplier } from "./damage";
 import { createEncounter, createUnit, enemyLevel, gridSize } from "./encounter";
 import { getUnit, isOptimalTile, posKey, reachableTiles } from "./grid";
-import { affectedUnits, isMoveSupported, targetOptions, validOptions } from "./targeting";
+import { affectedUnits, targetOptions, validOptions } from "./targeting";
 import { CombatError, type CombatEvent, type CombatState, type CombatUnit, type Pos } from "./types";
 
 type UnitSpec = { id: string; line: string; at: Pos; level?: number; hp?: number };
@@ -27,6 +27,7 @@ function battle(players: UnitSpec[], enemies: UnitSpec[], extra: Partial<CombatS
     order: [],
     turnIndex: 0,
     hasMoved: false,
+    intents: [],
     rngState: 12345,
     ...extra,
   };
@@ -81,12 +82,16 @@ describe("damage", () => {
 });
 
 describe("move data", () => {
-  it("gives every critter a cheap move with no cooldown that works today", () => {
+  it("gives every critter a cheap move with no cooldown (TECH_DESIGN §8.2)", () => {
     for (const critter of critters) {
       const basics = critter.moves.map(getMove).filter((m) => m.mana <= 1 && m.cooldown === 0);
       expect(basics.length, critter.line).toBeGreaterThan(0);
-      expect(basics.some(isMoveSupported), critter.line).toBe(true);
     }
+  });
+
+  it("only uses statuses that exist", () => {
+    const known = new Set(["Burn", "Root", "Slow", "Stun", "Weak", "Guard", "Regen", "Evade", "Empower", "Haste"]);
+    for (const m of moves) for (const e of m.effects) if (e.type === "status") expect(known.has(e.status), m.id).toBe(true);
   });
 
   it("only references known moves, with sane numbers", () => {
@@ -168,11 +173,12 @@ describe("targeting", () => {
   });
 
   it("respects min and max range for single-target moves", () => {
+    // Enemies with SPD 4 like Pebbun, so the player acts first and nobody has moved yet.
     const state = battle(
       [{ id: "p1", line: "pebbun", at: { x: 0, y: 1 } }],
       [
-        { id: "e1", line: "gustling", at: { x: 1, y: 1 } },
-        { id: "e2", line: "gustling", at: { x: 4, y: 1 } },
+        { id: "e1", line: "rivetle", at: { x: 1, y: 1 } },
+        { id: "e2", line: "rivetle", at: { x: 4, y: 1 } },
       ],
     );
     const unit = getUnit(state, "p1");
@@ -276,7 +282,7 @@ describe("battle flow", () => {
     expect(() => applyAction(state, { type: "useMove", moveId: "E1", target: { x: 4, y: 1 } })).toThrow("No target in range");
     expect(() => applyAction({ ...state, mana: 0 }, { type: "useMove", moveId: "E1", target: { x: 4, y: 1 } })).toThrow("Not enough mana");
     expect(() => applyAction(state, { type: "useMove", moveId: "D1", target: { x: 4, y: 1 } })).toThrow("does not know");
-    expect(moveBlockedReason(state, getUnit(state, "p1"), getMove("E4"))).toBe("Not available yet");
+    expect(moveBlockedReason(state, getUnit(state, "p1"), getMove("E4"))).toBeNull(); // Kindle works now
   });
 
   it("counts cooldowns in own turns", () => {
@@ -342,7 +348,7 @@ describe("battle flow", () => {
   it("lets enemies walk toward the player when nothing is in range", () => {
     // A 9-wide grid, so Rivetle (MOV 2, longest range 4) cannot reach anything yet.
     const state = battle([{ id: "p1", line: "sproutle", at: { x: 0, y: 1 } }], [{ id: "e1", line: "rivetle", at: { x: 8, y: 1 }, level: 2 }], { width: 9 });
-    // Both have SPD 4, so the player goes first. Skip, then Rivetle closes in.
+    // Both have SPD 4, so the player goes first. Skip, then Rivetle closes in (it may Guard itself on the way).
     const result = applyAction(state, { type: "endTurn" });
     expect(result.events.find((e) => e.type === "moved")).toEqual({ type: "moved", unitId: "e1", path: [{ x: 7, y: 1 }, { x: 6, y: 1 }] });
     expect(result.events.some((e) => e.type === "damaged")).toBe(false);

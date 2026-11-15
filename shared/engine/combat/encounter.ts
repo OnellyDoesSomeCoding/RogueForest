@@ -4,7 +4,7 @@ import type { RunSave } from "../../types";
 import type { Rng } from "../rng";
 import { computeStats, stageForLevel } from "../stats";
 import { isOptimalTile, posKey } from "./grid";
-import type { CombatState, CombatUnit, Pos, Side } from "./types";
+import type { CombatState, CombatUnit, Obstacle, Pos, Side } from "./types";
 
 export type RoomKind = "normal" | "elite" | "boss";
 
@@ -33,6 +33,7 @@ export function createUnit(args: { id: string; side: Side; slot: number; line: s
     moves: [...line.moves],
     cooldowns: {},
     onOptimalTile: false,
+    statuses: [],
   };
 }
 
@@ -76,11 +77,11 @@ export function createEncounter(run: RunSave, rng: Rng): CombatState {
   }
 
   // Sometimes one rock in the middle column.
-  const obstacles: Pos[] = [];
+  const obstacles: Obstacle[] = [];
   if (rng.chance(0.5)) {
     const column = Math.floor((width - 1) / 2);
     const spots = Array.from({ length: height }, (_, y) => ({ x: column, y })).filter((p) => !taken.has(posKey(p)));
-    if (spots.length > 0) obstacles.push(rng.pick(spots));
+    if (spots.length > 0) obstacles.push({ ...rng.pick(spots), rounds: null });
   }
 
   return {
@@ -95,6 +96,7 @@ export function createEncounter(run: RunSave, rng: Rng): CombatState {
     order: [],
     turnIndex: 0,
     hasMoved: false,
+    intents: [],
     rngState: rng.state,
   };
 }

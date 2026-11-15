@@ -1,21 +1,23 @@
-// The fight (TECH_DESIGN §7.3): timeline, shared mana, move-then-act turns.
+// The fight (TECH_DESIGN §7.3, §7.4): timeline, shared mana, move-then-act turns, enemy intents.
 // The engine decides everything. This scene sends actions and animates the events it gets back.
 import { applyAction, currentUnit, moveBlockedReason } from "@shared/engine/combat/combat";
 import { computeDamage } from "@shared/engine/combat/damage";
 import { createEncounter } from "@shared/engine/combat/encounter";
 import { posKey, reachableTiles, samePos, unitAt } from "@shared/engine/combat/grid";
+import { hasStatus } from "@shared/engine/combat/statuses";
 import { affectedUnits, validOptions, type TargetOption } from "@shared/engine/combat/targeting";
-import { CombatError, type CombatAction, type CombatEvent, type CombatState, type CombatUnit, type Pos } from "@shared/engine/combat/types";
+import { CombatError, type CombatAction, type CombatEvent, type CombatState, type CombatUnit, type Intent, type Pos } from "@shared/engine/combat/types";
 import { Rng } from "@shared/engine/rng";
-import { getMove } from "@shared/gameData";
-import type { Move } from "@shared/types";
+import { getMove, getStatus } from "@shared/gameData";
+import type { Move, StatusId } from "@shared/types";
 import * as Phaser from "phaser";
 import { BoardView, FRAME } from "../board";
+import { UnitCard, describeMove, moveTag } from "../cards";
 import { hideTextBelow, type DomText } from "../domText";
-import { UnitCard, describeMove } from "../cards";
 import { COLOR, H, TEXT, W, label, makeButton, panel, session, setupCamera, textureKey, tween, wait, type Button, type Disposable } from "../ui";
 
-const DEFAULT_HINT = "Click a blue tile to move. Then pick a move and a target. Keys: 1–4 moves, E end turn, Esc cancel.";
+const DEFAULT_HINT = "Click a blue tile to move, then pick a move and a target. Red tiles are enemy attacks: step off them to dodge. Keys: 1–4, E end turn, Esc cancel.";
+const STATUS_COLOR = { good: TEXT.good, bad: "#ffb36b" } as const;
 
 export class CombatScene extends Phaser.Scene {
   private state!: CombatState;
@@ -39,7 +41,15 @@ export class CombatScene extends Phaser.Scene {
   private timelineItems: Disposable[] = [];
 
   // What the HUD currently shows. During playback it lags behind `state` and follows the events.
-  private shown = { round: 0, mana: 0, order: [] as string[], current: null as string | null, fainted: new Set<string>() };
+  private shown = {
+    round: 0,
+    mana: 0,
+    order: [] as string[],
+    current: null as string | null,
+    fainted: new Set<string>(),
+    intents: [] as Intent[],
+    statuses: new Map<string, StatusId[]>(),
+  };
 
   constructor() {
     super("Combat");
@@ -92,9 +102,10 @@ export class CombatScene extends Phaser.Scene {
     });
 
     if (data.events?.length) {
-      this.shown = { round: 0, mana: start.maxMana, order: [], current: null, fainted: new Set() };
+      this.resetShown(start);
+      this.shown.round = 0;
       this.drawHud();
-      void this.play(data.events);
+      void this.play(data.events, start);
     } else {
       this.refresh();
     }
@@ -109,9 +120,10 @@ export class CombatScene extends Phaser.Scene {
 
   private async act(action: CombatAction): Promise<void> {
     if (this.busy || !this.me()) return;
+    const before = this.state;
     let result;
     try {
-      result = applyAction(this.state, action);
+      result = applyAction(before, action);
     } catch (err) {
       if (!(err instanceof CombatError)) throw err;
       this.hint.setText(err.message);
@@ -122,7 +134,7 @@ export class CombatScene extends Phaser.Scene {
     s.combat = result.state;
     s.rngState = result.state.rngState;
     this.selected = null;
-    await this.play(result.events);
+    await this.play(result.events, before);
   }
 
   private pickMoveSlot(index: number): void {
@@ -144,7 +156,7 @@ export class CombatScene extends Phaser.Scene {
     this.selected = unit ? move : null;
     this.options = unit && move ? validOptions(this.state, unit, move) : [];
     this.moveButtons.forEach((button, i) => button.setSelected(Boolean(move) && unit?.moves[i] === move?.id));
-    this.hint.setText(move ? `${describeMove(move)} Click a yellow tile to use it.` : DEFAULT_HINT);
+    this.hint.setText(move ? `${describeMove(move)} Click a yellow tile to use it.` : this.idleHint());
     this.drawHighlights();
   }
 
@@ -174,15 +186,46 @@ export class CombatScene extends Phaser.Scene {
     this.hoverTile = tile;
     const unit = tile ? unitAt(this.state, tile) : undefined;
     this.hoverCard.show(unit ?? null, "Hover a critter to see its stats and moves.", { showBonus: true });
-    if (!this.busy) this.drawHighlights();
+    if (this.busy) return;
+    if (!this.selected) this.hint.setText((tile && this.intentHint(tile)) || this.idleHint());
+    this.drawHighlights();
+  }
+
+  // ---------- hints ----------
+
+  private idleHint(): string {
+    const unit = this.me();
+    if (unit && hasStatus(unit, "Root") && !this.state.hasMoved) return `${unit.name} is rooted and can't move this turn. Pick a move, or end the turn.`;
+    return DEFAULT_HINT;
+  }
+
+  private describeIntent(unit: CombatUnit, intent: Intent): string {
+    if (!intent.moveId) return `${unit.name} plans to move closer.`;
+    const move = getMove(intent.moveId);
+    const what = `${move.name} (${move.type}${move.power > 0 ? `, power ${move.power}` : ""})`;
+    return intent.hostile ? `${unit.name} plans ${what} on the red tiles.` : `${unit.name} plans ${what} to help its side.`;
+  }
+
+  /** What the enemies plan for a tile, or null if nothing. */
+  private intentHint(tile: Pos): string | null {
+    const unit = unitAt(this.state, tile);
+    if (unit?.side === "enemy") {
+      if (hasStatus(unit, "Stun")) return `${unit.name} is stunned and will skip its turn.`;
+      const intent = this.state.intents.find((i) => i.unitId === unit.id);
+      return intent ? this.describeIntent(unit, intent) : `${unit.name} has already acted this round.`;
+    }
+    const threats = this.state.intents.filter((i) => i.hostile && i.tiles.some((t) => samePos(t, tile)));
+    if (threats.length === 0) return null;
+    return threats.map((i) => this.describeIntent(this.unitById(i.unitId), i)).join(" ");
+  }
+
+  private unitById(id: string): CombatUnit {
+    return this.state.units.find((u) => u.id === id) as CombatUnit;
   }
 
   // ---------- drawing ----------
 
-  /** Redraws everything from the current state. Called when no animation is running. */
-  private refresh(): void {
-    const state = this.state;
-    this.board.sync(state);
+  private resetShown(state: CombatState): void {
     const active = currentUnit(state);
     this.shown = {
       round: state.round,
@@ -190,11 +233,21 @@ export class CombatScene extends Phaser.Scene {
       order: [...state.order],
       current: active?.id ?? null,
       fainted: new Set(state.units.filter((u) => u.fainted).map((u) => u.id)),
+      intents: structuredClone(state.intents ?? []),
+      statuses: new Map(state.units.map((u) => [u.id, u.statuses.map((s) => s.id)])),
     };
+  }
+
+  /** Redraws everything from the current state. Called when no animation is running. */
+  private refresh(): void {
+    const state = this.state;
+    this.board.sync(state);
+    this.resetShown(state);
+    this.board.showIntents(this.shown.intents);
     this.drawHud();
     this.buildMoveButtons();
     this.drawHighlights();
-    this.hint.setText(DEFAULT_HINT);
+    this.hint.setText(this.idleHint());
     if (state.phase === "won" || state.phase === "lost") this.showResult(state.phase);
   }
 
@@ -259,7 +312,7 @@ export class CombatScene extends Phaser.Scene {
       const button = makeButton(this, x, y, 97, 47, "", () => this.pickMoveSlot(i), {
         depth: 22,
         onHover: (over) => {
-          if (!this.selected && !this.busy) this.hint.setText(over ? describeMove(move) : DEFAULT_HINT);
+          if (!this.selected && !this.busy) this.hint.setText(over ? describeMove(move) : this.idleHint());
         },
       });
       const dim = blocked ? "#56685f" : undefined;
@@ -275,14 +328,20 @@ export class CombatScene extends Phaser.Scene {
         pips.fillStyle(blocked ? 0x35505f : 0x4fb3ff, 1).fillRect(x + 7 + m * 8, y + 23, 5, 5);
       }
       button.extras.push(pips);
-      const stats = move.power > 0 ? `Pow ${move.power}` : move.effects.some((e) => e.type === "heal") ? "Heal" : "Support";
-      button.extras.push(label(this, x + 92, y + 21, stats, { originX: 1, depth: 24, color: dim ?? TEXT.muted }));
+      button.extras.push(label(this, x + 92, y + 21, moveTag(move), { originX: 1, depth: 24, color: dim ?? TEXT.muted }));
       const range = move.range[1] === 0 ? move.shape : `${move.shape} ${move.range[0]}–${Math.min(move.range[1], 9)}`;
       button.extras.push(label(this, x + 6, y + 34, blocked ?? range, { depth: 24, color: blocked ? TEXT.bad : TEXT.muted }));
 
       button.setEnabled(!blocked);
       this.moveButtons.push(button);
     });
+  }
+
+  private preview(target: CombatUnit, text: string, color: string, row = 0): void {
+    const view = this.board.units.get(target.id);
+    if (!view) return;
+    const y = view.root.y + view.headY - 12 - row * 10;
+    this.previews.push(label(this, view.root.x, y, text, { size: 9, bold: true, color, originX: 0.5, originY: 1, depth: 800 }).setStroke("#050a08", 3));
   }
 
   private drawHighlights(): void {
@@ -293,7 +352,9 @@ export class CombatScene extends Phaser.Scene {
 
     if (!this.selected) {
       const reach = this.state.hasMoved ? [] : [...reachableTiles(this.state, unit).values()].map((path) => path[path.length - 1] as Pos);
-      return this.board.highlight([{ tiles: reach, color: COLOR.moveRange, alpha: 0.35, outline: true }]);
+      this.board.highlight([{ tiles: reach, color: COLOR.moveRange, alpha: 0.35, outline: true }]);
+      this.drawThreats();
+      return;
     }
 
     const all = new Map<string, Pos>();
@@ -304,29 +365,77 @@ export class CombatScene extends Phaser.Scene {
       { tiles: hovered?.tiles ?? [], color: COLOR.attackRange, alpha: 0.55, outline: true },
     ]);
 
-    // Preview: expected damage or healing on each unit the hovered option would hit.
+    // Preview: what the hovered option would do to each unit it affects.
     if (!hovered) return;
     const move = this.selected;
     for (const target of affectedUnits(this.state, unit, move, hovered)) {
-      const feet = this.board.feet(target.pos as Pos);
-      let text = "";
-      let color: string = TEXT.main;
+      if (target.side !== unit.side && hasStatus(target, "Evade")) {
+        this.preview(target, "Evade", "#bfe9ff");
+        continue;
+      }
+      const lines: { text: string; color: string }[] = [];
       if (move.power > 0) {
         const { amount, typeMult } = computeDamage(unit, move, target, 1);
-        text = `-${amount}${typeMult > 1 ? " ▲" : typeMult < 1 ? " ▼" : ""}`;
-        color = typeMult > 1 ? TEXT.good : typeMult < 1 ? TEXT.bad : TEXT.main;
-      } else {
-        const heal = move.effects.find((e) => e.type === "heal");
-        if (heal && heal.type === "heal") text = `+${Math.min(Math.round((target.stats.hp * heal.percent) / 100), target.stats.hp - target.hp)}`;
-        color = TEXT.good;
+        lines.push({ text: `-${amount}${typeMult > 1 ? " ▲" : typeMult < 1 ? " ▼" : ""}`, color: typeMult > 1 ? TEXT.good : typeMult < 1 ? TEXT.bad : TEXT.main });
       }
-      if (text) this.previews.push(label(this, feet.x, feet.y - 34, text, { size: 9, bold: true, color, originX: 0.5, originY: 1, depth: 800 }).setStroke("#050a08", 3));
+      for (const e of move.effects) {
+        if (e.type === "heal") lines.push({ text: `+${Math.min(Math.round((target.stats.hp * e.percent) / 100), target.stats.hp - target.hp)}`, color: TEXT.good });
+        else if (e.type === "status") lines.push({ text: e.status, color: STATUS_COLOR[getStatus(e.status as StatusId).kind] });
+        else if (e.type === "push" || e.type === "pull") lines.push({ text: `${e.type === "push" ? "Push" : "Pull"} ${e.distance}`, color: TEXT.main });
+        else if (e.type === "pullToCenter") lines.push({ text: "Pull", color: TEXT.main });
+        else if (e.type === "cleanse" && target.statuses.some((s) => getStatus(s.id).kind === "bad")) lines.push({ text: "Cleanse", color: TEXT.good });
+      }
+      lines.slice(0, 2).forEach((l, row) => this.preview(target, l.text, l.color, row));
+    }
+  }
+
+  /** Red numbers over your critters that stand on enemy attack tiles: the expected damage. */
+  private drawThreats(): void {
+    const totals = new Map<string, number>();
+    for (const intent of this.state.intents) {
+      if (!intent.hostile || !intent.moveId) continue;
+      const enemy = this.unitById(intent.unitId);
+      const move = getMove(intent.moveId);
+      for (const tile of intent.tiles) {
+        const target = unitAt(this.state, tile);
+        if (!target || target.side === enemy.side) continue;
+        const amount = move.power > 0 && !hasStatus(target, "Evade") ? computeDamage(enemy, move, target, 1).amount : 0;
+        totals.set(target.id, (totals.get(target.id) ?? 0) + amount);
+      }
+    }
+    // Drawn in the top-right corner of the critter's own tile, so it is clear whose number it is.
+    for (const [id, amount] of totals) {
+      const view = this.board.units.get(id);
+      if (!view) continue;
+      const text = amount > 0 ? `-${amount}` : "!";
+      this.previews.push(label(this, view.root.x + 14, view.root.y - 25, text, { size: 8, bold: true, color: TEXT.bad, originX: 1, depth: 800 }).setStroke("#050a08", 3));
     }
   }
 
   // ---------- event playback ----------
 
-  private async play(events: CombatEvent[]): Promise<void> {
+  private setShownStatuses(unitId: string, ids: StatusId[]): void {
+    this.shown.statuses.set(unitId, ids);
+    this.board.units.get(unitId)?.setStatuses(ids);
+  }
+
+  private dropIntent(unitId: string): void {
+    if (!this.shown.intents.some((i) => i.unitId === unitId)) return;
+    this.shown.intents = this.shown.intents.filter((i) => i.unitId !== unitId);
+    this.board.showIntents(this.shown.intents);
+  }
+
+  private async walk(unitId: string, path: Pos[], stepMs: number): Promise<void> {
+    const view = this.board.units.get(unitId);
+    if (!view) return;
+    for (const step of path) {
+      const feet = this.board.feet(step);
+      await tween(this, { targets: view.root, x: feet.x, y: feet.y, duration: stepMs });
+      this.board.placeUnit(view, step);
+    }
+  }
+
+  private async play(events: CombatEvent[], from: CombatState): Promise<void> {
     this.busy = true;
     this.board.highlight([]);
     for (const p of this.previews) p.destroy();
@@ -336,8 +445,14 @@ export class CombatScene extends Phaser.Scene {
       button.setEnabled(false);
     }
     this.endTurnButton.setEnabled(false);
+    if (!this.shown.statuses.size) this.shown.statuses = new Map(from.units.map((u) => [u.id, u.statuses.map((s) => s.id)]));
 
-    const unitOf = (id: string) => this.state.units.find((u) => u.id === id) as CombatUnit;
+    const unitOf = (id: string) => this.unitById(id);
+    const above = (id: string, extra = 0) => {
+      const view = this.board.units.get(id);
+      return view ? { x: view.root.x, y: view.root.y + view.headY - extra } : null;
+    };
+
     for (const event of events) {
       if (this.closed) return;
       const view = "unitId" in event ? this.board.units.get(event.unitId) : undefined;
@@ -353,26 +468,44 @@ export class CombatScene extends Phaser.Scene {
           banner.destroy();
           break;
         }
+        case "intentsDeclared":
+          this.shown.intents = structuredClone(event.intents);
+          this.board.showIntents(this.shown.intents);
+          await wait(this, 350);
+          break;
+        case "intentCancelled":
+          this.dropIntent(event.unitId);
+          break;
         case "turnStarted":
           this.shown.current = event.unitId;
           this.drawHud();
-          this.hint.setText(unitOf(event.unitId).side === "enemy" ? `${unitOf(event.unitId).name} (enemy) is acting…` : DEFAULT_HINT);
+          this.hint.setText(unitOf(event.unitId).side === "enemy" ? `${unitOf(event.unitId).name} (enemy) is acting…` : this.idleHint());
           if (unitOf(event.unitId).side === "enemy") await wait(this, 350);
           break;
-        case "moved":
-          for (const step of event.path) {
-            const feet = this.board.feet(step);
-            if (view) await tween(this, { targets: view.root, x: feet.x, y: feet.y, duration: 110 });
-            view?.place(feet.x, feet.y);
-          }
+        case "turnSkipped": {
+          const at = above(event.unitId);
+          if (at) this.board.floatText(at, "Stunned!", "#ffe27a", 9);
+          this.dropIntent(event.unitId);
+          await wait(this, 450);
           break;
+        }
+        case "moved":
+          await this.walk(event.unitId, event.path, 110);
+          break;
+        case "forcedMove": {
+          await this.walk(event.unitId, event.path, 70);
+          break;
+        }
         case "moveUsed": {
           const user = unitOf(event.unitId);
           this.shown.mana = user.side === "player" ? event.mana : this.shown.mana;
           this.drawHud();
-          if (view) this.board.floatText({ x: view.root.x, y: view.root.y - 34 }, getMove(event.moveId).name, TEXT.gold, 9);
+          const at = above(event.unitId, 4);
+          if (at) this.board.floatText(at, getMove(event.moveId).name, TEXT.gold, 9);
           view?.frame(FRAME.windup);
-          this.board.highlight([{ tiles: event.tiles, color: user.side === "player" ? COLOR.attackRange : COLOR.intent, alpha: 0.55, outline: true }]);
+          const hostile = getMove(event.moveId).target === "enemy";
+          const color = !hostile ? COLOR.optimal : user.side === "player" ? COLOR.attackRange : COLOR.intent;
+          this.board.highlight([{ tiles: event.tiles, color, alpha: 0.55, outline: true }]);
           await wait(this, 180);
           view?.frame(FRAME.strike);
           await wait(this, 180);
@@ -380,13 +513,23 @@ export class CombatScene extends Phaser.Scene {
           this.board.highlight([]);
           break;
         }
+        case "attackFizzled": {
+          const at = above(event.unitId, 4);
+          if (at) this.board.floatText(at, `${getMove(event.moveId).name}: out of range`, TEXT.muted, 8);
+          await wait(this, 450);
+          break;
+        }
         case "damaged": {
           view?.setHp(event.hp);
           if (view) {
             view.frame(FRAME.hurt);
-            const note = event.typeMult > 1 ? "Strong!" : event.typeMult < 1 ? "Resisted" : "";
-            this.board.floatText({ x: view.root.x, y: view.root.y - 30 }, `-${event.amount}`, event.typeMult > 1 ? TEXT.gold : TEXT.main, 11);
-            if (note) this.board.floatText({ x: view.root.x, y: view.root.y - 42 }, note, event.typeMult > 1 ? TEXT.good : TEXT.bad, 8);
+            const note = event.cause === "collision" ? "Bump!" : event.cause === "Burn" ? "Burn" : event.typeMult > 1 ? "Strong!" : event.typeMult < 1 ? "Resisted" : "";
+            const numberColor = event.cause === "Burn" ? "#ffb36b" : event.typeMult > 1 ? TEXT.gold : TEXT.main;
+            const at = above(event.unitId);
+            if (at) {
+              this.board.floatText(at, `-${event.amount}`, numberColor, 11);
+              if (note) this.board.floatText({ x: at.x, y: at.y - 12 }, note, event.typeMult > 1 ? TEXT.good : event.typeMult < 1 ? TEXT.bad : TEXT.muted, 8);
+            }
             const x = view.root.x;
             await tween(this, { targets: view.root, x: x + 3, duration: 45, yoyo: true, repeat: 2 });
             view.root.x = x;
@@ -395,13 +538,45 @@ export class CombatScene extends Phaser.Scene {
           this.refreshCards();
           break;
         }
-        case "healed":
+        case "healed": {
           view?.setHp(event.hp);
-          if (view) this.board.floatText({ x: view.root.x, y: view.root.y - 30 }, `+${event.amount}`, TEXT.good, 11);
+          const at = above(event.unitId);
+          if (at) this.board.floatText(at, `+${event.amount}`, TEXT.good, 11);
           await wait(this, 250);
+          this.refreshCards();
+          break;
+        }
+        case "evaded": {
+          const at = above(event.unitId);
+          if (at) this.board.floatText(at, "Evaded!", "#bfe9ff", 10);
+          if (view) {
+            const x = view.root.x;
+            await tween(this, { targets: view.root, x: x - 6, duration: 90, yoyo: true });
+            view.root.x = x;
+          }
+          break;
+        }
+        case "statusApplied": {
+          const list = this.shown.statuses.get(event.unitId) ?? [];
+          if (!list.includes(event.status)) this.setShownStatuses(event.unitId, [...list, event.status]);
+          const at = above(event.unitId, 8);
+          if (at) this.board.floatText(at, `+${event.status}`, STATUS_COLOR[getStatus(event.status).kind], 9);
+          await wait(this, 220);
+          break;
+        }
+        case "statusRemoved":
+          this.setShownStatuses(event.unitId, (this.shown.statuses.get(event.unitId) ?? []).filter((s) => s !== event.status));
+          break;
+        case "obstaclePlaced":
+          this.board.addRock(event.pos, true);
+          await wait(this, 280);
+          break;
+        case "obstacleRemoved":
+          this.board.removeRock(event.pos);
           break;
         case "fainted":
           this.shown.fainted.add(event.unitId);
+          this.dropIntent(event.unitId);
           if (view) {
             view.frame(FRAME.faint);
             await tween(this, { targets: view.root, alpha: 0, delay: 250, duration: 300 });
@@ -411,6 +586,7 @@ export class CombatScene extends Phaser.Scene {
           this.drawHud();
           break;
         case "turnEnded":
+          if (unitOf(event.unitId).side === "enemy") this.dropIntent(event.unitId);
           await wait(this, 120);
           break;
         case "battleEnded":

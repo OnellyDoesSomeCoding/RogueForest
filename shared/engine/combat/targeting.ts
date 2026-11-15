@@ -1,6 +1,6 @@
-// Which tiles a move can be aimed at, and which units it hits (TECH_DESIGN §8.1).
+// Which tiles a move can be aimed at, and which units it affects (TECH_DESIGN §8.1).
 import type { Move } from "../../types";
-import { DIRS, inBounds, isObstacle, manhattan, samePos, unitAt } from "./grid";
+import { DIRS, inBounds, isFree, isObstacle, manhattan, samePos, unitAt } from "./grid";
 import type { CombatState, CombatUnit, Pos } from "./types";
 
 export interface TargetOption {
@@ -10,15 +10,10 @@ export interface TargetOption {
   tiles: Pos[];
 }
 
-/** Effects the engine applies today. Statuses, push/pull and obstacles arrive with M3. */
-const SUPPORTED_EFFECTS = new Set(["heal", "lifesteal", "pierce"]);
-
-/** False for moves that would do nothing yet (their only purpose is an effect from a later milestone). */
-export function isMoveSupported(move: Move): boolean {
-  return move.power > 0 || move.effects.some((e) => SUPPORTED_EFFECTS.has(e.type));
-}
-
 const hasEffect = (move: Move, type: string) => move.effects.some((e) => e.type === type);
+
+/** True for moves aimed at the other side. */
+export const isHostile = (move: Move): boolean => move.target === "enemy";
 
 /**
  * The unit on a tile, pretending `mover` stands on `origin` instead of its real tile.
@@ -89,7 +84,11 @@ export function targetOptions(state: CombatState, unit: CombatUnit, move: Move, 
   }
 }
 
-/** Units a move would affect when aimed with `option`: enemies for attacks, allies (and the user) for support. */
+/**
+ * Units a move would affect when aimed with `option`. Attacks affect only the other side
+ * (no friendly fire). Support moves affect the user's side, including the user when its tile
+ * is covered, or always when the move has `includeSelf` (Bulwark).
+ */
 export function affectedUnits(
   state: CombatState,
   unit: CombatUnit,
@@ -97,19 +96,25 @@ export function affectedUnits(
   option: TargetOption,
   origin: Pos | null = unit.pos,
 ): CombatUnit[] {
-  if (!origin) return [];
+  if (!origin || move.target === "tile") return [];
   const hit: CombatUnit[] = [];
   for (const tile of option.tiles) {
     const other = occupant(state, tile, unit, origin);
     if (!other || hit.includes(other)) continue;
     const wanted =
-      move.target === "enemy" ? other.side !== unit.side : move.target === "ally" ? other.side === unit.side : move.target === "self" ? other.id === unit.id : false;
+      move.target === "enemy" ? other.side !== unit.side : move.target === "ally" ? other.side === unit.side : other.id === unit.id;
     if (wanted) hit.push(other);
   }
+  if (hasEffect(move, "includeSelf") && !hit.includes(unit)) hit.unshift(unit);
   return hit;
 }
 
-/** Aiming options that would affect at least one unit. These are the ones a player may pick. */
+/**
+ * Aiming options a player may pick: ones that affect at least one unit, or for tile moves
+ * (Earth Wall), ones aimed at an empty tile.
+ */
 export function validOptions(state: CombatState, unit: CombatUnit, move: Move): TargetOption[] {
-  return targetOptions(state, unit, move).filter((o) => affectedUnits(state, unit, move, o).length > 0);
+  const options = targetOptions(state, unit, move);
+  if (move.target === "tile") return options.filter((o) => isFree(state, o.target));
+  return options.filter((o) => affectedUnits(state, unit, move, o).length > 0);
 }

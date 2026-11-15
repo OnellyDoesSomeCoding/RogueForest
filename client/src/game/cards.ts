@@ -1,9 +1,10 @@
 // Info panels: a unit's stats, and plain-language move descriptions.
-import { isMoveSupported } from "@shared/engine/combat/targeting";
+import { effectiveMov, effectiveSpd } from "@shared/engine/combat/statuses";
 import type { CombatUnit } from "@shared/engine/combat/types";
-import { getMove } from "@shared/gameData";
-import type { Effect, Move } from "@shared/types";
+import { getMove, getStatus } from "@shared/gameData";
+import type { Effect, Move, StatusId } from "@shared/types";
 import * as Phaser from "phaser";
+import { statusIconKey } from "./board";
 import { COLOR, TEXT, label, panel, textureKey, type Layered } from "./ui";
 
 const SHAPE_TEXT: Record<Move["shape"], string> = {
@@ -19,7 +20,7 @@ const SHAPE_TEXT: Record<Move["shape"], string> = {
 function effectText(e: Effect): string | null {
   switch (e.type) {
     case "status":
-      return e.status;
+      return `${e.status} (${getStatus(e.status as StatusId).text.replace(/.$/, "").toLowerCase()})`;
     case "push":
       return `Push ${e.distance}`;
     case "pull":
@@ -41,23 +42,25 @@ function effectText(e: Effect): string | null {
   }
 }
 
-const ACTIVE_EFFECTS = new Set(["heal", "lifesteal", "pierce", "includeSelf"]);
-
 export function describeMove(move: Move): string {
   const pierces = move.effects.some((e) => e.type === "pierce");
-  const shape = move.shape === "line" && pierces ? "a line through every unit" : SHAPE_TEXT[move.shape];
-  const range = move.range[1] === 0 ? "" : move.shape === "row" ? "" : ` Range ${move.range[0]}–${move.range[1]}.`;
-  const head = `${move.name}: ${move.type}, ${move.mana} mana${move.power > 0 ? `, power ${move.power}` : ""}. Hits ${shape}.${range}`;
-  const active = move.effects.filter((e) => ACTIVE_EFFECTS.has(e.type)).map(effectText).filter(Boolean);
-  const later = move.effects.filter((e) => !ACTIVE_EFFECTS.has(e.type)).map(effectText).filter(Boolean);
+  const withSelf = move.effects.some((e) => e.type === "includeSelf");
+  const shape = move.shape === "line" && pierces ? "a line through every unit" : move.target === "tile" ? "an empty tile" : SHAPE_TEXT[move.shape];
+  const who = move.target === "ally" ? (withSelf ? " (the user and allies)" : " (allies)") : "";
+  const range = move.range[1] === 0 || move.shape === "row" ? "" : ` Range ${move.range[0]}–${move.range[1]}.`;
+  const head = `${move.name}: ${move.type}, ${move.mana} mana${move.power > 0 ? `, power ${move.power}` : ""}. Hits ${shape}${who}.${range}`;
+  const effects = move.effects.map(effectText).filter(Boolean);
   const cooldown = move.cooldown > 0 ? ` Cooldown ${move.cooldown}.` : "";
-  return (
-    head +
-    cooldown +
-    (active.length ? ` ${active.join(". ")}.` : "") +
-    (later.length ? ` Not active yet: ${later.join(", ")}.` : "") +
-    (isMoveSupported(move) ? "" : " This move cannot be used until then.")
-  );
+  return head + cooldown + (effects.length ? ` ${effects.join(". ")}.` : "");
+}
+
+/** A short label for a move button: what it does besides damage. */
+export function moveTag(move: Move): string {
+  if (move.power > 0) return `Pow ${move.power}`;
+  if (move.target === "tile") return "Rock";
+  const status = move.effects.find((e) => e.type === "status");
+  if (move.effects.some((e) => e.type === "heal")) return "Heal";
+  return status && status.type === "status" ? status.status : "Support";
 }
 
 const TILE_NAME = { front: "Front", back: "Back", flank: "Flank" } as const;
@@ -115,12 +118,29 @@ export class UnitCard {
 
     add(label(scene, left, y + 59, `ATK ${unit.stats.atk}`));
     add(label(scene, left + 62, y + 59, `DEF ${unit.stats.def}`));
-    add(label(scene, left, y + 69, `SPD ${unit.stats.spd}`));
-    add(label(scene, left + 62, y + 69, `MOV ${unit.stats.mov}`));
+    // SPD and MOV after statuses: green when raised, red when lowered.
+    const shade = (now: number, base: number) => (now > base ? TEXT.good : now < base ? TEXT.bad : TEXT.main);
+    const spd = effectiveSpd(unit);
+    const mov = effectiveMov(unit);
+    add(label(scene, left, y + 69, `SPD ${spd}`, { color: shade(spd, unit.stats.spd) }));
+    add(label(scene, left + 62, y + 69, `MOV ${mov}`, { color: shade(mov, unit.stats.mov) }));
 
     const bonus = options.showBonus ? (unit.onOptimalTile ? "  +10% now" : "") : "";
     add(label(scene, left, y + 81, `Best tile: ${TILE_NAME[unit.optimalTile]}${bonus}`, { color: bonus ? TEXT.good : TEXT.muted }));
 
     add(label(scene, left, y + 93, unit.moves.map((id) => getMove(id).name).join(", "), { color: TEXT.muted, wrap: w - 14 }));
+
+    // Statuses with turns left.
+    let sx = left;
+    for (const s of unit.statuses) {
+      const def = getStatus(s.id);
+      const key = statusIconKey(s.id);
+      if (scene.textures.exists(key)) {
+        add(scene.add.image(sx, y + 118, key).setOrigin(0).setScale(0.75));
+        sx += 13;
+      }
+      const text = add(label(scene, sx, y + 120, `${s.id} ${s.turns}`, { color: def.kind === "bad" ? TEXT.bad : TEXT.good }));
+      sx += text.width + 6;
+    }
   }
 }

@@ -1,12 +1,13 @@
 // The combat reducer: applyAction(state, action) -> { state, events } (TECH_DESIGN §7).
 // Pure. The input state is never changed. All randomness comes from state.rngState.
-import { config, getMove } from "../../gameData";
+import { config, getMove, getStatus } from "../../gameData";
 import type { Move } from "../../types";
 import { Rng } from "../rng";
-import { computeDamage } from "./damage";
-import { planEnemyTurn } from "./enemy";
+import { checkBattleEnd, gainHp, loseHp, resolveMove } from "./effects";
+import { executeEnemyTurn, planIntents } from "./enemy";
 import { getUnit, inBounds, isAlive, isFree, isOptimalTile, posKey, reachableTiles, samePos } from "./grid";
-import { affectedUnits, isMoveSupported, validOptions, type TargetOption } from "./targeting";
+import { armStatuses, effectiveSpd, hasStatus, tickStatuses } from "./statuses";
+import { validOptions } from "./targeting";
 import { CombatError, type CombatAction, type CombatEvent, type CombatResult, type CombatState, type CombatUnit } from "./types";
 
 /** The unit whose turn it is, or null outside a battle. */
@@ -16,26 +17,26 @@ export function currentUnit(state: CombatState): CombatUnit | null {
   return id ? getUnit(state, id) : null;
 }
 
-/** Turn order: SPD high to low. Ties: player units first, then the lower slot index. */
+/** Turn order: SPD (after Slow/Haste) high to low. Ties: player units first, then the lower slot index. */
 export function turnOrder(state: CombatState): string[] {
   return state.units
     .filter(isAlive)
-    .sort((a, b) => b.stats.spd - a.stats.spd || (a.side === b.side ? a.slot - b.slot : a.side === "player" ? -1 : 1))
+    .sort((a, b) => effectiveSpd(b) - effectiveSpd(a) || (a.side === b.side ? a.slot - b.slot : a.side === "player" ? -1 : 1))
     .map((u) => u.id);
 }
 
 /** Why the current player unit cannot use a move right now, or null if it can. */
 export function moveBlockedReason(state: CombatState, unit: CombatUnit, move: Move): string | null {
-  if (!isMoveSupported(move)) return "Not available yet";
   const cooldown = unit.cooldowns[move.id] ?? 0;
   if (cooldown > 0) return `Ready in ${cooldown} turn${cooldown === 1 ? "" : "s"}`;
   if (unit.side === "player" && state.mana < move.mana) return "Not enough mana";
-  if (validOptions(state, unit, move).length === 0) return "No target in range";
+  if (validOptions(state, unit, move).length === 0) return move.target === "tile" ? "No empty tile in range" : "No target in range";
   return null;
 }
 
 export function applyAction(prev: CombatState, action: CombatAction): CombatResult {
   const state = structuredClone(prev);
+  state.intents ??= [];
   const events: CombatEvent[] = [];
   const rng = new Rng(state.rngState);
 
@@ -70,7 +71,7 @@ export function applyAction(prev: CombatState, action: CombatAction): CombatResu
       state.phase = "battle";
       state.round = 0;
       events.push({ type: "battleStarted" });
-      startRound(state, events);
+      startRound(state, events, rng);
       advance(state, events, rng);
       break;
     }
@@ -78,6 +79,7 @@ export function applyAction(prev: CombatState, action: CombatAction): CombatResu
     case "move": {
       const unit = requirePlayerTurn(state);
       if (state.hasMoved) throw new CombatError("This critter has already moved this turn.");
+      if (hasStatus(unit, "Root")) throw new CombatError("This critter is rooted and cannot move.");
       const path = reachableTiles(state, unit).get(posKey(action.to));
       if (!path) throw new CombatError("That tile is out of reach.");
       unit.pos = { ...action.to };
@@ -97,14 +99,14 @@ export function applyAction(prev: CombatState, action: CombatAction): CombatResu
       state.mana -= move.mana;
       resolveMove(state, unit, move, option, rng, events);
       // Using a move ends the turn: moving after attacking is not allowed.
-      events.push({ type: "turnEnded", unitId: unit.id });
+      endTurn(unit, events);
       advance(state, events, rng);
       break;
     }
 
     case "endTurn": {
       const unit = requirePlayerTurn(state);
-      events.push({ type: "turnEnded", unitId: unit.id });
+      endTurn(unit, events);
       advance(state, events, rng);
       break;
     }
@@ -124,25 +126,43 @@ function requirePlayerTurn(state: CombatState): CombatUnit {
   return unit;
 }
 
-/** Round start: refill mana, tick cooldowns, work out the turn order. */
-function startRound(state: CombatState, events: CombatEvent[]): void {
+/** Round start: refill mana, tick cooldowns and rocks, work out the turn order, enemies declare intents. */
+function startRound(state: CombatState, events: CombatEvent[], rng: Rng): void {
   state.round += 1;
   state.mana = state.maxMana;
   for (const unit of state.units) {
     for (const id of Object.keys(unit.cooldowns)) unit.cooldowns[id] = Math.max(0, (unit.cooldowns[id] ?? 0) - 1);
   }
+  for (const rock of [...state.obstacles]) {
+    if (rock.rounds == null) continue;
+    rock.rounds -= 1;
+    if (rock.rounds <= 0) {
+      state.obstacles = state.obstacles.filter((o) => o !== rock);
+      events.push({ type: "obstacleRemoved", pos: { x: rock.x, y: rock.y } });
+    }
+  }
   state.order = turnOrder(state);
   state.turnIndex = -1;
   events.push({ type: "roundStarted", round: state.round, mana: state.mana, order: [...state.order] });
+  planIntents(state, rng, events);
 }
 
-/** Moves on to the next living unit. Enemy turns play out here, until a player unit is up or the fight ends. */
+/** End of a unit's turn: its statuses tick down. */
+function endTurn(unit: CombatUnit, events: CombatEvent[]): void {
+  if (!unit.fainted) tickStatuses(unit, events);
+  events.push({ type: "turnEnded", unitId: unit.id });
+}
+
+/**
+ * Moves on to the next living unit. Start-of-turn statuses apply here (Burn, Regen, Stun).
+ * Enemy turns play out here, until a player unit is up or the fight ends.
+ */
 function advance(state: CombatState, events: CombatEvent[], rng: Rng): void {
   while (state.phase === "battle") {
     let next = state.turnIndex + 1;
     while (next < state.order.length && !isAlive(getUnit(state, state.order[next] as string))) next++;
     if (next >= state.order.length) {
-      startRound(state, events);
+      startRound(state, events, rng);
       if (state.order.length === 0) return; // Nobody left to act. Cannot happen in a live battle.
       continue;
     }
@@ -152,65 +172,32 @@ function advance(state: CombatState, events: CombatEvent[], rng: Rng): void {
     const unit = getUnit(state, state.order[next] as string);
     unit.onOptimalTile = unit.pos !== null && isOptimalTile(unit.optimalTile, unit.pos, state.width, state.height);
     events.push({ type: "turnStarted", unitId: unit.id, onOptimalTile: unit.onOptimalTile });
+    armStatuses(unit);
+
+    // Burn and Regen happen at the start of the holder's turn.
+    for (const s of [...unit.statuses]) {
+      const percent = getStatus(s.id).percent ?? 0;
+      if (s.id === "Burn") loseHp(unit, Math.max(1, Math.round((unit.stats.hp * percent) / 100)), events, { sourceId: null, cause: "Burn" });
+      else if (s.id === "Regen") gainHp(unit, Math.max(1, Math.round((unit.stats.hp * percent) / 100)), events, "Regen");
+    }
+    if (unit.fainted) {
+      // Burned out at the start of its turn. Its plan goes with it.
+      state.intents = state.intents.filter((i) => i.unitId !== unit.id);
+      if (checkBattleEnd(state, events)) return;
+      continue;
+    }
+
+    if (hasStatus(unit, "Stun")) {
+      state.intents = state.intents.filter((i) => i.unitId !== unit.id);
+      events.push({ type: "turnSkipped", unitId: unit.id, reason: "Stun" });
+      endTurn(unit, events);
+      continue;
+    }
+
     if (unit.side === "player") return;
 
-    const plan = planEnemyTurn(state, unit, rng);
-    const destination = plan.path[plan.path.length - 1];
-    if (destination) {
-      unit.pos = { ...destination };
-      events.push({ type: "moved", unitId: unit.id, path: plan.path });
-    }
-    if (plan.attack) resolveMove(state, unit, getMove(plan.attack.moveId), plan.attack.option, rng, events);
-    events.push({ type: "turnEnded", unitId: unit.id });
+    executeEnemyTurn(state, unit, rng, events);
+    if (state.phase !== "battle") return;
+    endTurn(unit, events);
   }
-}
-
-function resolveMove(state: CombatState, unit: CombatUnit, move: Move, option: TargetOption, rng: Rng, events: CombatEvent[]): void {
-  const targets = affectedUnits(state, unit, move, option);
-  // Cooldown counts own turns before reuse. +1 because the round-start tick also runs before the next turn.
-  unit.cooldowns[move.id] = move.cooldown + 1;
-  events.push({ type: "moveUsed", unitId: unit.id, moveId: move.id, tiles: option.tiles, mana: state.mana });
-
-  let dealt = 0;
-  if (move.power > 0) {
-    for (const target of targets) {
-      const variance = rng.range(config.combat.varianceMin, config.combat.varianceMax);
-      const { amount, typeMult } = computeDamage(unit, move, target, variance);
-      const taken = Math.min(amount, target.hp);
-      target.hp -= taken;
-      dealt += taken;
-      events.push({ type: "damaged", unitId: target.id, sourceId: unit.id, amount, hp: target.hp, typeMult });
-      if (target.hp === 0) {
-        target.fainted = true;
-        target.pos = null;
-        events.push({ type: "fainted", unitId: target.id });
-      }
-    }
-  }
-
-  for (const effect of move.effects) {
-    if (effect.type === "heal") {
-      for (const target of targets) heal(target, Math.round((target.stats.hp * effect.percent) / 100), events);
-    } else if (effect.type === "lifesteal") {
-      heal(unit, Math.round((dealt * effect.percent) / 100), events);
-    }
-  }
-
-  // A fight is lost when every active critter on the grid has fainted.
-  const alive = (side: CombatUnit["side"]) => state.units.some((u) => u.side === side && isAlive(u));
-  if (!alive("enemy")) {
-    state.phase = "won";
-    events.push({ type: "battleEnded", result: "won" });
-  } else if (!alive("player")) {
-    state.phase = "lost";
-    events.push({ type: "battleEnded", result: "lost" });
-  }
-}
-
-function heal(unit: CombatUnit, amount: number, events: CombatEvent[]): void {
-  if (unit.fainted) return;
-  const gained = Math.min(amount, unit.stats.hp - unit.hp);
-  if (gained <= 0) return;
-  unit.hp += gained;
-  events.push({ type: "healed", unitId: unit.id, amount: gained, hp: unit.hp });
 }

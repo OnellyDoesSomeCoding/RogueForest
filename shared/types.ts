@@ -72,6 +72,26 @@ export interface Move {
   effects: Effect[];
 }
 
+export type StatusId = "Burn" | "Root" | "Slow" | "Stun" | "Weak" | "Guard" | "Regen" | "Evade" | "Empower" | "Haste";
+
+export interface StatusDef {
+  id: StatusId;
+  kind: "good" | "bad";
+  /** Default duration, in the holder's own turns. */
+  turns: number;
+  /** Icon file name: assets/icons/status_<icon>.png */
+  icon: string;
+  /** Burn and Regen: % of max HP per turn. */
+  percent?: number;
+  /** Multiplier on damage this unit deals (Weak, Empower). */
+  damageDealt?: number;
+  /** Multiplier on damage this unit takes (Guard). */
+  damageTaken?: number;
+  mov?: number;
+  spd?: number;
+  text: string;
+}
+
 export interface BiomeDef {
   id: string;
   name: string;

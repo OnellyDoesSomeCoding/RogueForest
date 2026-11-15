@@ -5,7 +5,8 @@ import typesJson from "./data/types.json";
 import badgesJson from "./data/badges.json";
 import biomesJson from "./data/biomes.json";
 import movesJson from "./data/moves.json";
-import type { BadgeDef, BiomeDef, CritterLine, CritterStage, Move, TypeDef, TypeId } from "./types";
+import statusesJson from "./data/statuses.json";
+import type { BadgeDef, BiomeDef, CritterLine, CritterStage, Move, StatusDef, StatusId, TypeDef, TypeId } from "./types";
 
 export const config = configJson;
 
@@ -14,12 +15,20 @@ export const typeDefs = typesJson.types as TypeDef[];
 export const badges = badgesJson.badges as BadgeDef[];
 export const moves = movesJson.moves as Move[];
 export const biomes = biomesJson.biomes as BiomeDef[];
+export const statuses = statusesJson.statuses as StatusDef[];
 
 const critterByLine = new Map(critters.map((c) => [c.line, c]));
 const typeById = new Map(typeDefs.map((t) => [t.id, t]));
 const badgeById = new Map(badges.map((b) => [b.id, b]));
 const moveById = new Map(moves.map((m) => [m.id, m]));
 const biomeById = new Map(biomes.map((b) => [b.id, b]));
+const statusById = new Map(statuses.map((s) => [s.id, s]));
+
+export function getStatus(id: StatusId): StatusDef {
+  const status = statusById.get(id);
+  if (!status) throw new Error(`Unknown status: ${id}`);
+  return status;
+}
 
 export function getMove(id: string): Move {
   const move = moveById.get(id);

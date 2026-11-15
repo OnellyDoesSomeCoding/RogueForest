@@ -2,8 +2,10 @@
 // the placeholder for it is drawn instead (TECH_DESIGN §14).
 import { Rng } from "@shared/engine/rng";
 import { createEncounter } from "@shared/engine/combat/encounter";
-import { critters, typeDefs } from "@shared/gameData";
+import { critters, statuses, typeDefs } from "@shared/gameData";
 import * as Phaser from "phaser";
+import { statusIconKey } from "../board";
+import { makeMissingStatusIcons } from "../statusIcons";
 import { H, W, label, session, setupCamera, textureKey } from "../ui";
 
 export class BootScene extends Phaser.Scene {
@@ -26,6 +28,9 @@ export class BootScene extends Phaser.Scene {
       }
     }
     for (const type of typeDefs) this.load.image(textureKey.typeIcon(type.id), `/assets/icons/type_${type.id.toLowerCase()}.png`);
+    for (const status of statuses) {
+      if (session(this).statusIcons.has(status.icon)) this.load.image(statusIconKey(status.id), `/assets/icons/status_${status.icon}.png`);
+    }
     this.load.image("icon:mana", "/assets/icons/mana.png");
     this.load.image("bg", `/assets/backgrounds/${run.biomeId}.png`);
     this.load.image("tile:a", `/assets/tiles/${run.biomeId}_ground_a.png`);
@@ -34,6 +39,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    makeMissingStatusIcons(this);
+
     // Idle animation: frames 0 and 1 of each sheet (idle A, idle B).
     for (const line of critters) {
       for (const stage of line.stages) {

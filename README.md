@@ -2,7 +2,7 @@
 
 A browser-based, turn-based, grid-combat roguelike. The full design is in [docs/TECH_DESIGN.md](docs/TECH_DESIGN.md).
 
-**Status:** milestones M0 (monorepo), M1 (pages + accounts) and M2 (combat sandbox) are done. Starting a run opens one practice fight. Enemy intents, statuses and push/pull come with M3.
+**Status:** milestones M0–M3 are done: pages and accounts, and a practice fight with enemy intents, statuses and push/pull. The map and room flow come with M4.
 
 ## Run it locally
 
