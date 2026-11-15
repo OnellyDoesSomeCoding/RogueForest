@@ -1,0 +1,12 @@
+{
+  "types": [
+    { "id": "Ember", "label": "Fire", "color": "#e2582b", "strongAgainst": ["Flora", "Iron"], "resistedBy": ["Dew", "Gloom"] },
+    { "id": "Dew", "label": "Water", "color": "#3f8fe0", "strongAgainst": ["Ember", "Clay"], "resistedBy": ["Flora", "Lume"] },
+    { "id": "Clay", "label": "Earth", "color": "#b47a45", "strongAgainst": ["Iron", "Zephyr"], "resistedBy": ["Dew", "Flora"] },
+    { "id": "Zephyr", "label": "Wind", "color": "#7fd4c4", "strongAgainst": ["Flora", "Gloom"], "resistedBy": ["Clay", "Iron"] },
+    { "id": "Flora", "label": "Plants", "color": "#57b34a", "strongAgainst": ["Dew", "Clay"], "resistedBy": ["Ember", "Zephyr"] },
+    { "id": "Iron", "label": "Steel", "color": "#8d98a8", "strongAgainst": ["Zephyr", "Lume"], "resistedBy": ["Ember", "Clay"] },
+    { "id": "Gloom", "label": "Darkness", "color": "#7a52b3", "strongAgainst": ["Lume", "Ember"], "resistedBy": ["Zephyr"] },
+    { "id": "Lume", "label": "Light", "color": "#f0cf45", "strongAgainst": ["Gloom", "Dew"], "resistedBy": ["Iron"] }
+  ]
+}

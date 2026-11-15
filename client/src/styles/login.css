@@ -1,0 +1,129 @@
+/* Login page (#/login) and the temporary run summary on #/game. */
+.auth {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+  background:
+    linear-gradient(rgb(5 10 8 / 0.72), rgb(5 10 8 / 0.9)),
+    url("/assets/home/hero.png") center / cover no-repeat;
+  image-rendering: pixelated;
+}
+
+.auth > * {
+  image-rendering: auto;
+}
+
+.auth__panel {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 20px;
+}
+
+.auth__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: var(--font-pixel);
+  font-weight: 700;
+  font-size: 30px;
+  color: var(--gold);
+  text-shadow: 0 3px 0 var(--black);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: var(--px) solid var(--line);
+}
+
+.tab {
+  font-family: var(--font-pixel);
+  font-size: 18px;
+  padding: 10px 8px;
+  color: var(--muted);
+  border-bottom: var(--px) solid transparent;
+  margin-bottom: calc(var(--px) * -1);
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab--active {
+  color: var(--gold-hi);
+  border-bottom-color: var(--gold);
+}
+
+.auth__form {
+  display: grid;
+  gap: 16px;
+}
+
+.auth__panel .link {
+  justify-self: center;
+  font-size: 14px;
+}
+
+/* ---- run summary (placeholder game page) ---- */
+.run-summary {
+  width: min(520px, 100%);
+  display: grid;
+  gap: 14px;
+}
+
+.run-summary h1 {
+  color: var(--gold);
+  font-size: 32px;
+}
+
+.run-summary h3 {
+  color: var(--gold-hi);
+  font-size: 18px;
+}
+
+.run-critters {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.run-critter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px 6px 6px;
+  background: var(--black);
+  border: var(--px) solid var(--line);
+}
+
+.run-critter .critter-icon {
+  --size: 48px;
+}
+
+.run-critter .type-chips {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 2px;
+}
+
+.run-critter__level {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.run-critter__hp {
+  margin-left: auto;
+  font-family: var(--font-pixel);
+  color: var(--moss);
+  white-space: nowrap;
+}
+
+.run-summary__seed {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}

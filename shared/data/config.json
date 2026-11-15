@@ -1,0 +1,111 @@
+{
+  "version": "0.1.0",
+  "saveVersion": 1,
+  "auth": {
+    "sessionDays": 30,
+    "usernameMin": 3,
+    "usernameMax": 16,
+    "passwordMin": 8,
+    "passwordMax": 72,
+    "rateLimit": { "windowMinutes": 15, "maxPerIpUser": 10, "maxPerIp": 50 }
+  },
+  "starter": {
+    "pointBudget": 10,
+    "startingLevel": 5,
+    "activeSlots": 3,
+    "benchSlots": 5,
+    "defaultUnlocks": ["emberkit", "dewdle", "sproutle"]
+  },
+  "run": {
+    "acts": 5,
+    "floorsPerAct": 10,
+    "firstBiome": "meadow",
+    "lastBiome": "heartwood",
+    "potionSlots": 3
+  },
+  "stats": {
+    "roles": {
+      "Tank": { "hp": 60, "atk": 8, "def": 12, "spd": 4, "mov": 2 },
+      "Striker": { "hp": 40, "atk": 13, "def": 7, "spd": 7, "mov": 3 },
+      "Support": { "hp": 45, "atk": 8, "def": 8, "spd": 6, "mov": 3 },
+      "Control": { "hp": 45, "atk": 10, "def": 8, "spd": 6, "mov": 3 },
+      "Skirmisher": { "hp": 38, "atk": 11, "def": 6, "spd": 9, "mov": 4 }
+    },
+    "stageMultipliers": [1, 1.3, 1.6],
+    "spdPerStage": 1,
+    "levelScale": 0.06
+  },
+  "xp": {
+    "toNextLevelPerLevel": 20,
+    "perEnemyLevel": 4,
+    "benchPercentPerFloor": 2
+  },
+  "types": {
+    "strongMultiplier": 1.5,
+    "resistMultiplier": 0.75,
+    "sameTypeBonus": 1.2
+  },
+  "combat": {
+    "maxMana": 3,
+    "damageK": 4,
+    "varianceMin": 0.9,
+    "varianceMax": 1.1,
+    "optimalTileBonus": 0.1,
+    "placementZone": "any",
+    "collisionDamagePercent": 5,
+    "critMultiplier": 1.5
+  },
+  "grid": [
+    { "fromFloor": 1, "toFloor": 10, "normal": [5, 3], "elite": [6, 4], "boss": [7, 5] },
+    { "fromFloor": 11, "toFloor": 20, "normal": [6, 4], "elite": [7, 5], "boss": [7, 5] },
+    { "fromFloor": 21, "toFloor": 30, "normal": [7, 4], "elite": [7, 5], "boss": [8, 6] },
+    { "fromFloor": 31, "toFloor": 40, "normal": [7, 5], "elite": [8, 6], "boss": [9, 7] },
+    { "fromFloor": 41, "toFloor": 50, "normal": [8, 6], "elite": [9, 7], "boss": [9, 7] }
+  ],
+  "map": {
+    "minNodesPerFloor": 2,
+    "maxNodesPerFloor": 4,
+    "weights": { "normal": 45, "event": 22, "elite": 12, "shop": 12, "rest": 9 },
+    "eliteMinFloor": 4,
+    "restMinFloor": 4,
+    "restMaxFloor": 7,
+    "minShopsPerAct": 1
+  },
+  "enemies": {
+    "levelBase": 2,
+    "levelPerFloor": 0.85,
+    "eliteLevelBonus": 2,
+    "bossLevelBonus": 4,
+    "bossHpMultiplier": 4,
+    "bossAtkMultiplier": 1.3
+  },
+  "acorns": {
+    "normal": [10, 15],
+    "elite": [25, 35],
+    "boss": [60, 60]
+  },
+  "captive": {
+    "elitePrice": 40,
+    "bossPrice": 90,
+    "cleanWinDiscount": 0.25
+  },
+  "rest": {
+    "healPercent": 30,
+    "trainLevels": 1
+  },
+  "shop": {
+    "critterCount": 2,
+    "critterPrice": [50, 80],
+    "packPrice": 60,
+    "packReveal": 3,
+    "packPick": 1,
+    "megaPackChance": 0.3,
+    "megaPackPrice": 100,
+    "megaPackReveal": 5,
+    "megaPackPick": 2,
+    "potionCount": 3,
+    "potionPrice": [20, 35],
+    "relicCount": 2,
+    "relicPrice": { "Common": 80, "Uncommon": 115, "Rare": 150 }
+  }
+}
